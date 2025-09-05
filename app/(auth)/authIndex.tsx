@@ -65,11 +65,47 @@ export default function AuthIndex() {
       router.replace("/(screens)/screenIndex");
     } catch (err) {
       console.log(err);
+      showToast('Login Failed!', 'error')
     }
   };
 
+  // Effect to handle address suggestions
+  useEffect(() => {
+    setGooglePlaceSelected('')
+    const fetchPlaces = async () => {
+      if (!values.address) {
+        return
+      }
+
+      // Trial and error: Alternative Places API endpoint
+      // const url = `https://places.googleapis.com/v1/places:autocomplete/json?input=${encodeURIComponent(values.address)}&key=${process.env.EXPO_PUBLIC_GOOGLE_API_KEY}&language=en`
+      const url = 'https://places.googleapis.com/v1/places:autocomplete'
+
+      try {
+        const res = await axios.post(url, { input: values.address, regionCode: 'uk' }, { headers: { "X-Goog-Api-Key": `${process.env.EXPO_PUBLIC_GOOGLE_API_KEY}` } })
+        // const data = await res.json()
+        const data = res.data
+        if (data.suggestions) {
+          console.log(data.suggestions[1])
+          setSuggestions(data.suggestions)
+        }
+      } catch (error) {
+        console.log("Places API error:", error)
+      }
+    }
+
+    const timeout = setTimeout(fetchPlaces, 300);
+    return () => clearTimeout(timeout)
+  }, [values.address])
+  const addressInput = React.useRef<TextInput>(null)
+
   return (
     <SafeAreaView style={{ flex: 1 }}>
+      {/* Trial and error: Google Places Autocomplete component */}
+      {/* <GooglePlacesAutocomplete predefinedPlaces={[]} styles={{}} onPress={(data, details)=>console.log(data)} placeholder="search" query={{key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY, language: 'en'}}
+          /> */}
+      
+      {/* Background gradient */}
       <LinearGradient
         colors={["#000000", "#161616", "#161616", "#000000"]}
         style={{

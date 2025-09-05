@@ -1,3 +1,3 @@
 import axios from "axios";
 
-export const api = axios.create({baseURL: "https://cb1e-92-10-76-233.ngrok-free.app/api"})
+export const api = axios.create({baseURL: "https://distress-server.onrender.com/api"})

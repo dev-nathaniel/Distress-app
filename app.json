@@ -47,12 +47,16 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Distress to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow Distress to use your location.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [
-      "expo-build-properties"
-    ]
+        "expo-build-properties"
+      ],
+      "expo-font",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

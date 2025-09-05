@@ -12,6 +12,9 @@ import {
   loginStart,
   loginSucess,
   loginFailure,
+  updateEmergencyContactsStart,
+  updateEmergencyContactsFailure,
+  updateEmergencyContactsSuccess,
 } from "@/redux/slices/userSlice";
 import { api } from "@/axios";
 import { AppDispatch } from "./store";
@@ -36,12 +39,28 @@ export const login = async (dispatch: AppDispatch, user: User) => {
     const res = await api.post("/auth/login", user);
     dispatch(loginSucess(res.data));
     console.log(res.data);
+    return res.data
   } catch (err: any) {
     dispatch(loginFailure(err.message));
     throw new Error(err.message);
     console.log(err.response.data);
   }
 };
+
+export const getEmergencyContacts = async (dispatch: AppDispatch, id: string, token: string) => {
+  dispatch(updateEmergencyContactsStart())
+  try {
+    console.log('i am being called', token)
+    const res = await api.get(`/user/${id}/emergencyContacts`, {headers: {Authorization: `Bearer ${token}`}})
+    console.log(res.data)
+    dispatch(updateEmergencyContactsSuccess(res.data.hasEmergencyContacts))
+    console.log(res.data)
+  } catch (error: any) {
+    console.log(error.response)
+    dispatch(updateEmergencyContactsFailure(error.message))
+    throw new Error(error.message)
+  }
+}
 
 export const logout = async (dispatch: AppDispatch) => {
   dispatch(logoutStart());

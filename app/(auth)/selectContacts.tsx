@@ -11,23 +11,31 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as Contacts from "expo-contacts";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { updateUser } from "@/redux/apiCalls";
+import { getEmergencyContacts, updateUser } from "@/redux/apiCalls";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
+import { api } from "@/axios";
+import { useToast } from "@/context/ToastContext";
+import React from "react";
 
 export default function SelectContacts() {
+  // State for managing contacts list
   const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
   const windowHeight = Dimensions.get("window").height;
-  const [selectedContacts, setSelectedContacts] = useState<Contacts.Contact[]>(
-    []
-  );
+  
+  // State for selected emergency contacts
+  const [selectedContacts, setSelectedContacts] = useState<Contacts.Contact[]>([]);
   const [lastContact, setLastContact] = useState<Contacts.Contact>();
+  
+  // State for contact search
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Redux state selectors
   const user = useSelector((state: RootState) =>
     state.user.currentUser === null ? null : state.user.currentUser
   );
@@ -37,18 +45,26 @@ export default function SelectContacts() {
   const errorMessage = useSelector((state: RootState) =>
     state.user.error === null ? null : state.user.error
   );
-  console.log(user);
+  
+  // Trial and error: Debug logging
+  // console.log(user);
+  
+  const { showToast } = useToast()
   const dispatch = useDispatch();
 
+  // Filter contacts based on search term
   const filteredContacts = useCallback(() => {
+    console.log(contacts[3])
+    console.log(contacts[0]?.phoneNumbers?.[0])
     return contacts.filter(
       (contact) =>
         contact.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         contact.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contact.phoneNumbers[0].digits?.includes(searchTerm)
+        contact.phoneNumbers?.[0]?.digits?.includes(searchTerm)
     );
   }, [contacts, searchTerm]);
 
+  // Handle contact selection
   const selectContact = (newContact: Contacts.Contact) => {
     if (selectedContacts.length == 3) {
       setLastContact(newContact);
@@ -59,6 +75,7 @@ export default function SelectContacts() {
     );
   };
 
+  // Handle contact deselection
   const deselectContact = (contactToRemove: Contacts.Contact) => {
     setSelectedContacts((prev: Contacts.Contact[]) =>
       prev.filter((contact) => contact.id !== contactToRemove.id)
@@ -66,6 +83,7 @@ export default function SelectContacts() {
     setContacts((prev: Contacts.Contact[]) => [contactToRemove, ...prev]);
   };
 
+  // Effect to request and load contacts on component mount
   useEffect(() => {
     (async () => {
       try {
@@ -75,7 +93,8 @@ export default function SelectContacts() {
 
           if (data.length > 0) {
             const contacts = data;
-            console.log(data);
+            // Trial and error: Debug logging
+            // console.log(data);
             setContacts(data);
             setSelectedContacts([]);
           }
@@ -88,6 +107,7 @@ export default function SelectContacts() {
     })();
   }, []);
 
+  // Effect to handle emergency contacts limit
   useEffect(() => {
     if (selectedContacts.length > 3) {
       Alert.alert(
@@ -105,6 +125,7 @@ export default function SelectContacts() {
     }
   }, [selectedContacts]);
 
+  // Add emergency contacts to user profile
   const addEmergencyContacts = async () => {
     try {
       const filteredSelectedContacts = selectedContacts.map((item) => {
@@ -124,19 +145,30 @@ export default function SelectContacts() {
           }),
         };
       });
-      await updateUser(dispatch, user?._id, {
-        emergencyContacts: filteredSelectedContacts,
-      });
-      navigateToHomeScreen();
+      console.log(filteredSelectedContacts, 'data to be sent')
+      if (user?.id && user?.token) {
+        await api.put(`/user/${user.id}`, {emergencyContacts: filteredSelectedContacts}, {headers: {Authorization: `Bearer ${user.token}`}})
+        await getEmergencyContacts(dispatch, user.id, user.token)
+        // Trial and error: Alternative update method
+        // await updateUser(dispatch, user._id, {
+        //   emergencyContacts: filteredSelectedContacts,
+        // });
+        showToast('Emergency contacts successfully added!', 'success')
+        navigateToHomeScreen();
+      }
     } catch (err) {
-      console.log(err);
+      showToast('Something went wrong', 'error')
+      deselectContact(lastContact)
+      console.log(err.response);
     }
   };
 
+  // Navigate to home screen
   const navigateToHomeScreen = () => {
-    router.replace("/(screens)/screenIndex");
+    router.replace("/(screens)/homeIndex");
   };
 
+  // Open device settings
   const openSettings = () => {
     if (Platform.OS === "ios") {
       Linking.openURL("app-settings:");
@@ -145,6 +177,7 @@ export default function SelectContacts() {
     }
   };
 
+  // Handle denied contacts permission
   const handleDeniedContactsPermission = () => {
     Alert.alert(
       "Contacts Permission Required",
@@ -155,8 +188,11 @@ export default function SelectContacts() {
       ]
     );
   };
+
+  // Render the contacts selection screen
   return (
     <SafeAreaView style={{ flex: 1 }}>
+      {/* Background gradient */}
       <LinearGradient
         colors={["#000000", "#161616", "#000000", "#161616"]}
         style={{
@@ -168,6 +204,7 @@ export default function SelectContacts() {
         }}
       />
       <View style={{ flex: 1, marginHorizontal: 16 }}>
+        {/* Emergency contacts container */}
         <View
           style={{
             backgroundColor: "#161616",
@@ -177,6 +214,7 @@ export default function SelectContacts() {
             marginBottom: 24,
           }}
         >
+          {/* Local authorities section */}
           <View
             style={{
               borderColor: "#7a7a7a40",
@@ -216,6 +254,7 @@ export default function SelectContacts() {
             </View>
           </View>
 
+          {/* Selected contacts list */}
           <View
             style={{
               backgroundColor: "#222222",
@@ -253,7 +292,7 @@ export default function SelectContacts() {
                         color: "#7a7a7a40",
                       }}
                     >
-                      {contact.phoneNumbers[0].number}
+                      {contact?.phoneNumbers?.[0]?.number}
                     </Text>
                   </View>
                 </View>
@@ -283,6 +322,7 @@ export default function SelectContacts() {
           </View>
         </View>
 
+        {/* Contacts search and list container */}
         <View
           style={{
             backgroundColor: "#161616",
@@ -292,6 +332,7 @@ export default function SelectContacts() {
             flex: 1,
           }}
         >
+          {/* Search input */}
           <View
             style={{
               backgroundColor: "#00000060",
@@ -309,6 +350,7 @@ export default function SelectContacts() {
             />
           </View>
 
+          {/* Contacts list */}
           <ScrollView style={{ flex: 1, paddingTop: 18 }}>
             {filteredContacts()?.map((contact, index) => (
               <TouchableOpacity
@@ -345,7 +387,7 @@ export default function SelectContacts() {
                         color: "#7a7a7a40",
                       }}
                     >
-                      {contact?.phoneNumbers[0].number}
+                      {contact?.phoneNumbers?.[0]?.number}
                     </Text>
                   </View>
                 </View>

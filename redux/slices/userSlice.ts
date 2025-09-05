@@ -28,13 +28,15 @@ export interface User {
 }
 
 export interface UserState {
-  currentUser: User | null;
+  currentUser: {id: string, token: string} | null;
+  emergencyContacts: boolean;
   isFetching: boolean;
   error: any;
 }
 
 const initialState: UserState = {
   currentUser: null,
+  emergencyContacts: false,
   isFetching: false,
   error: null,
 };
@@ -81,6 +83,18 @@ export const userSlice = createSlice({
       state.isFetching = false;
       state.error = action.payload;
     },
+    updateEmergencyContactsStart: (state) => {
+      state.isFetching = true
+    },
+    updateEmergencyContactsSuccess: (state, action) => {
+      state.emergencyContacts = action.payload
+      state.isFetching = false
+      state.error = null
+    },
+    updateEmergencyContactsFailure: (state, action) => {
+      state.error = action.payload
+      state.isFetching = false
+    },
     updateUserStart: (state) => {
       state.isFetching = true;
     },
@@ -107,6 +121,9 @@ export const {
   logoutStart,
   logoutSuccess,
   logoutFailure,
+  updateEmergencyContactsFailure,
+  updateEmergencyContactsStart,
+  updateEmergencyContactsSuccess,
   updateUserStart,
   updateUserSuccess,
   updateUserFailure,

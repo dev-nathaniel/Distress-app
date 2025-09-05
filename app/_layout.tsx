@@ -15,6 +15,9 @@ import { Provider, useSelector } from "react-redux";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import { PersistGate } from "redux-persist/integration/react";
+// import React from "react";
+import ToastProvider from "@/context/ToastContext";
+import React from "react";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -35,6 +38,7 @@ export default function RootLayout() {
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     ...FontAwesome.font,
   });
+  // persistor.purge();
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
@@ -51,6 +55,7 @@ export default function RootLayout() {
     return null;
   }
   return (
+    <ToastProvider>
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <ThemeProvider
@@ -60,32 +65,28 @@ export default function RootLayout() {
         </ThemeProvider>
       </PersistGate>
     </Provider>
+    </ToastProvider>
   );
 }
 
 function RootLayoutNav() {
-  const user = useSelector((state: RootState) =>
-    state.user.currentUser === null ? null : state.user.currentUser
+  const user = useSelector((state: RootState) => state.user.currentUser
   );
   console.log(user);
 
   useEffect(() => {
     if (user) {
-      router.replace("/(screens)/homeIndex");
+      router.replace("/(auth)/permissions");
     } else {
       router.replace("/(auth)/authIndex");
     }
   }, [user]);
 
-  return <Slot />;
-
-  {
-    /* <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-
-          <Stack.Screen name="(screens)" options={{ headerShown: false }} />
-
-          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-        </Stack> */
-  }
+  return (
+    <Stack>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(screens)" options={{ headerShown: false }} />
+      <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+    </Stack>
+  );
 }

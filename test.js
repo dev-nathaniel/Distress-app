@@ -62,7 +62,6 @@ import { app, storage } from "@/firebaseConfig";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/redux/store";
 import { logout } from "@/redux/apiCalls";
-import {Camera, CameraView, CameraType} from 'expo-camera'
 
 // Import authentication utilities
 import { validateToken } from "../(auth)/permissions";
@@ -81,6 +80,9 @@ import { io } from "socket.io-client";
 // Import location task utilities
 import { startBackgroundLocation } from "@/locationTask";
 
+// Import Camera utilities
+import { Camera, CameraType } from "expo-camera";
+
 export default function HomeScreen() {
   // State for emergency message input
   const [message, setMessage] = useState('')
@@ -96,8 +98,6 @@ export default function HomeScreen() {
   // Audio recording states
   const [recordingURI, setRecordingURI] = useState<string | null>(null)
   const player = useAudioPlayer(recordingURI)
-
-  const [videoRecordingURI, setVideoRecordingURI] = useState<string>()
   
   // Socket connection states
   const [isConnected, setIsConnected] = useState(false)
@@ -138,12 +138,23 @@ export default function HomeScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [socket, setSocket] = useState<any>(null);
 
-  const [isVideoRecording, setIsVideoRecording] = useState(false)
-  const cameraRef = useRef<CameraView | null>(null)
+  // Camera states
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [isVideoRecording, setIsVideoRecording] = useState(false);
+  const [videoURI, setVideoURI] = useState<string | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
 
   // Initialize Firebase database
   const database = getDatabase(app);
   // const socket = io("http://192.168.1.200:5000", {auth: {token: user?.token}}) // Trial and error: Local development socket
+
+  // Request camera permissions
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasCameraPermission(status === 'granted');
+    })();
+  }, []);
 
   // Request location permissions and get current location
   const requestLocation = async () => {
@@ -170,32 +181,8 @@ export default function HomeScreen() {
     }
   };
 
-  // Trial and error: Background location tracking
-  // TaskManager.defineTask("LOCATION_TASK", ({ data: { locations }, error }) => {
-  //  if (error) {
-  //    // check `error.message` for more details.
-  //    return;
-  //  }
-  //  console.log('Received new locations', locations);
-  //  setLocation(locations)
-  // });
-
-  //   await Location.startLocationUpdatesAsync("LOCATION_TASK", {distanceInterval: 4})
-
   // Display toast notification for emergency alerts
   const displayToast = () => {
-    // Trial and error: Alternative toast implementation
-    // Burnt.toast({
-    //   title: "congrats",
-    //   preset: "done",
-    //   haptic: "success",
-    //   duration: 3,
-    //   shouldDismissByDrag: true,
-    //   from: "top",
-    //   layout: {
-
-    //   }
-    // });
     setToast(true);
     setTimeout(() => {
       setToast(false);
@@ -225,33 +212,6 @@ export default function HomeScreen() {
       setTransport('N/A')
     }
 
-    // Trial and error: Emergency polling implementation
-    // const storeEmergencies = (data: any) => {
-    //   if (data.error) {
-    //     socket.emit("pollRequest", user?._id);
-    //   } else {
-    //     const filteredData = data.filter(
-    //       (item: any) =>
-    //         !receivedEmergencies.some(
-    //           (existingItem) => existingItem._id === item._id
-    //         )
-    //     );
-    //     if (filteredData.length > 0) {
-    //       setReceivedEmergencies((existingData) => [
-    //         ...existingData,
-    //         ...filteredData,
-    //       ]);
-    //     }
-
-    //     setTimeout(() => {
-    //       console.log(receivedEmergencies);
-    //       socket.emit("pollRequest");
-    //     }, 2000);
-    //   }
-    // };
-
-    // socket.on("pollResponse", storeEmergencies);
-
     socketInstance.on("connect", onConnect);
     socketInstance.on('disconnect', onDisconnect)
 
@@ -274,53 +234,20 @@ export default function HomeScreen() {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState !== 'active' && isRecording) {
         await stopRecording();
-        // stopVideoRecording()
+      }
+      if (nextAppState !== 'active' && isVideoRecording) {
+        await stopVideoRecording();
       }
     });
   
     return () => subscription.remove();
-  }, [isRecording]);
-
-  //Start video recording
-  const videoRecord = () => {
-    if (cameraRef.current && !isVideoRecording) {
-
-        setIsVideoRecording(true)
-        cameraRef.current?.recordAsync({maxDuration: 30}).then((video) => {
-          setVideoRecordingURI(video?.uri)
-          console.log('recording finished', video?.uri)
-        }).catch(error => {
-        setIsVideoRecording(false)
-        console.log('could not start recording video')
-        })
-
-    }
-  }
+  }, [isRecording, isVideoRecording]);
 
   // Start audio recording
   const record = async () => {
     await audioRecorder.prepareToRecordAsync()
     audioRecorder.record()
     setIsRecording(true)
-    // Trial and error: Real-time audio streaming
-    // intervalRef.current = setInterval(async () => {
-    //   if (audioRecorder.uri) {
-    //     const response = await FileSystem.readAsStringAsync(audioRecorder.uri, { encoding: FileSystem.EncodingType.Base64 })
-    //     socket.emit('audio', response)
-    //   }
-    // }, 1000)
-    //console.log(audioRecorder.isRecording, audioRecorder.currentTime, audioRecorder.uri, 'audio record')
-    // return () => clearInterval(intervalRef.current || undefined)
-  }
-
-  //console.log(audioRecorder.isRecording, audioRecorder.currentTime, 'audio recorder')
-
-  // stop video recording 
-  const stopVideoRecording =  () => {
-    if (cameraRef.current && isVideoRecording) {
-        cameraRef.current.stopRecording()
-        setIsVideoRecording(false)
-    }
   }
 
   // Stop audio recording and handle cleanup
@@ -328,15 +255,9 @@ export default function HomeScreen() {
     await audioRecorder.stop()
     setIsRecording(false)
     setRecordingURI(audioRecorder.uri)
-    // setRecordingURI(null)
-    // if (intervalRef.current) {
-    //   clearInterval(intervalRef.current)
-    // }
     if (audioRecorder.uri) {
       const response = await FileSystem.readAsStringAsync(audioRecorder.uri, { encoding: FileSystem.EncodingType.Base64 })
-      console.log(response, 'audio converting response')
       socket.emit('stop', response)
-      socket.emit('test', 'test')
     }
     console.log(audioRecorder.isRecording, audioRecorder.currentTime, audioRecorder.uri, 'audio stop record')
   }
@@ -347,25 +268,6 @@ export default function HomeScreen() {
     player.replace(recordingURI)
     player.play()
   }
-
-  // Trial and error: Alternative file upload implementation
-  // const uploadRecording = async (recording: string) => {
-  //   const filename = recording.split('/').pop()
-  //   const type = 'audio/m4a'
-
-  //   const formData = new FormData()
-  //   formData.append('emergencyRecording', {
-  //     uri: recording,
-  //     name: filename,
-  //     type
-  //   } as any)
-
-  //   try {
-  //     const res = await api.post('/upload', formData, {headers: {"Content-Type": "multipart/form-data"}})
-  //   } catch (error) {
-  //     console.log(error)
-  //   }
-  // }
 
   // Convert base64 to Blob for file upload
   function base64ToBlob(base64: string, contentType = '', sliceSize = 512): Blob {
@@ -405,10 +307,56 @@ export default function HomeScreen() {
     }
   }
 
-  // Create emergency alert with location and recording
+  // Upload video to Firebase storage
+  const uploadVideo = async (video: string | null) => {
+    try {
+      if (video) {
+        const refStorage = storageRef(storage, `users/${user?.id}/video_${Date.now()}.mp4`)
+        const blob = await (await fetch(video)).blob()
+        await uploadBytes(refStorage, blob)
+        console.log('Video uploaded')
+      }
+    } catch (error) {
+      console.log('Video upload error:', error)
+    }
+  }
+
+  // Camera video recording handlers
+  const startVideoRecording = async () => {
+    if (cameraRef.current && !isVideoRecording) {
+      try {
+        setIsVideoRecording(true);
+        const videoRecordPromise = cameraRef.current.recordAsync({
+          maxDuration: 30, // seconds, adjust as needed
+          quality: Camera.Constants.VideoQuality['480p'],
+        });
+        if (videoRecordPromise) {
+          const data = await videoRecordPromise;
+          setVideoURI(data.uri);
+          await uploadVideo(data.uri);
+        }
+      } catch (e) {
+        console.log('Video recording error:', e);
+      } finally {
+        setIsVideoRecording(false);
+      }
+    }
+  };
+
+  const stopVideoRecording = async () => {
+    if (cameraRef.current && isVideoRecording) {
+      try {
+        await cameraRef.current.stopRecording();
+      } catch (e) {
+        console.log('Stop video error:', e);
+      }
+      setIsVideoRecording(false);
+    }
+  };
+
+  // Create emergency alert with location, recording, and video
   const createEmergencyAlert = async () => {
     try {
-      if(!isRecording){
       const location = await requestLocation();
       const res = await api.post("/distress", {
         userId: user?.id,
@@ -424,86 +372,19 @@ export default function HomeScreen() {
       // await startBackgroundLocation()
       // if (!isRecording) {
       await record()
-      // videoRecord()
       // } else {
       //   await stopRecording()
       // }
       await setBrightness();
       displayToast();
-    } else {
-      await stopRecording()
-      showToast('Audio recording stopped', 'success')
-    }
+      // Start video recording in background
+      if (hasCameraPermission) {
+        startVideoRecording();
+      }
     } catch (err) {
       console.log(err);
     }
   };
-
-
-  // Trial and error: Alternative emergency fetching implementation
-  // const constantEmergencyFetch = async () => {
-  //   setInterval(
-  //   }, 1000);
-  // };
-
-  // Trial and error: Alternative emergency state management
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     try {
-  //       const res = await api.get(`/emergency/${user?._id}`);
-  //       const emergencies = res.data;
-  //       setReceivedEmergencies((prevData) => {
-  //         // Filter out items that already exist in the previous data
-  //         const uniqueNewData = emergencies.filter(
-  //           (newItem: any) =>
-  //             !prevData?.some((existingItem) => existingItem.id === newItem.id)
-  //         );
-
-  //         // Combine the existing data with the unique new data
-  //         return [...prevData, ...uniqueNewData];
-  //       });
-  //     } catch (err) {
-  //       console.log(err, user?._id);
-  //     }
-  //   };
-
-  //   // Fetch data every second
-  //   const intervalId = setInterval(fetchData, 1000);
-
-  //   // Clean up the interval on component unmount
-  //   return () => clearInterval(intervalId);
-  // }, []);
-
-  // useEffect(() => {
-  //   if (receivedEmergencies.length > 0) {
-  //     setMostRecentEmergency(
-  //       receivedEmergencies[receivedEmergencies.length - 1]
-  //     );
-  //     setReceivedEmergency(true);
-  //   }
-  // }, [receivedEmergencies]);
-
-  // useEffect(() => {
-  //   let locationSub: Location.LocationSubscription;
-  //   (async () => {
-  //     locationSub = await Location.watchPositionAsync({}, (location) => {
-  //       setLocation(location);
-  //     });
-  //   })();
-  //   return () => {
-  //     locationSub.remove();
-  //   };
-  // }, []);
-
-  // Trial and error: Alternative emergency event tracking
-  // useEffect(() => {
-  //   if (emergency) {
-  //     set(ref(database, "emergencyEvents/" + emergencyId), {
-  //       battery_level: batteryLevel,
-  //       location: location,
-  //     });
-  //   }
-  // }, [location, batteryLevel, emergency]);
 
   // Handle user logout
   const handleLogout = async () => {
@@ -532,7 +413,6 @@ export default function HomeScreen() {
     })()
   })
 
-
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <LinearGradient
@@ -552,7 +432,7 @@ export default function HomeScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <TouchableWithoutFeedback style={{ flex: 1 }} onPress={() => Keyboard.dismiss()}>
           <View style={{ flex: 1 }}>
-            <CameraView ref={cameraRef} facing="back" />
+
             <TouchableOpacity
               style={{ alignSelf: "flex-end", paddingHorizontal: 16 }}
               onPress={handleLogout}
@@ -733,6 +613,17 @@ export default function HomeScreen() {
                 {/* <Text>Distress Sent!</Text> */}
               </TouchableOpacity>
 
+              {/* Camera preview (hidden, for background recording) */}
+              {hasCameraPermission && (
+                <Camera
+                  ref={cameraRef}
+                  style={{ width: 1, height: 1, position: 'absolute', left: -1000, top: -1000 }}
+                  type={CameraType.back}
+                  ratio="16:9"
+                  // You can add more camera props as needed
+                />
+              )}
+
               {/* <View style={{ marginTop: 100, gap: 20 }}>
           <Text
             style={{
@@ -847,6 +738,16 @@ export default function HomeScreen() {
                 placeholder='Enter message...'
               />
             </View>
+            {/* Optionally, show video preview for debugging */}
+            {/* {videoURI && (
+              <Video
+                source={{ uri: videoURI }}
+                style={{ width: 200, height: 200 }}
+                useNativeControls
+                resizeMode="contain"
+                isLooping
+              />
+            )} */}
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

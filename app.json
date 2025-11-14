@@ -56,7 +56,9 @@
         "expo-build-properties"
       ],
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
